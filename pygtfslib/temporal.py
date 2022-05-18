@@ -211,17 +211,16 @@ class TripOpDayProvider:
     ):
         self.trip_id_to_opdays = trip_id_to_opdays
 
-    @classmethod
-    def from_directory(
-        cls: type[TripOpDayProvider], directory: str
-    ) -> TripOpDayProvider:
-        calendar = read_calendar(directory)
-        return cls(
-            trip_id_to_opdays={
-                row["trip_id"]: calendar.get(row["service_id"], set())
-                for row in iter_rows(directory, "trips.txt")
-            },
-        )
+    def load_directories(self: TripOpDayProvider, *directories: str):
+        for directory in directories:
+            calendar = read_calendar(directory)
+            for row in iter_rows(directory, "trips.txt"):
+                trip_id = row["trip_id"]
+                opdays = calendar.get(row["service_id"], set())
+                if trip_id in self.trip_id_to_opdays:
+                    self.trip_id_to_opdays[trip_id] |= opdays
+                else:
+                    self.trip_id_to_opdays[trip_id] = opdays
 
     def get_qualified_opdays(
         self: TripOpDayProvider,
