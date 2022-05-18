@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 from collections import defaultdict
 import datetime
 import logging
 import math
 from functools import lru_cache
+import typing
 
 from dateutil.tz import tzutc
 from dateutil import rrule
@@ -197,3 +200,38 @@ def read_frequency_timedeltas(directory, frequency_based_log_level=logging.WARNI
     for start_timedeltas in trip_id_to_start_timedeltas.values():
         start_timedeltas.sort()
     return trip_id_to_start_timedeltas
+
+
+class TripOpDayProvider:
+    """Provide information about operating days specific trips run on."""
+
+    def __init__(
+        self: TripOpDayProvider,
+        trip_id_to_opdays: typing.Mapping[str, typing.AbstractSet[datetime.date]],
+    ):
+        self.trip_id_to_opdays = trip_id_to_opdays
+
+    @classmethod
+    def from_directory(
+        cls: type[TripOpDayProvider], directory: str
+    ) -> TripOpDayProvider:
+        calendar = read_calendar(directory)
+        return cls(
+            trip_id_to_opdays={
+                row["trip_id"]: calendar.get(row["service_id"], set())
+                for row in iter_rows(directory, "trips.txt")
+            },
+        )
+
+    def get_qualified_opdays(
+        self: TripOpDayProvider,
+        trip_ids: str | typing.AbstractSet[str],
+        criterion: typing.Callable[[datetime.datetime], bool],
+    ) -> set[datetime.datetime]:
+        if isinstance(trip_ids, str):
+            trip_ids = {trip_ids}
+        qualified_opdays = set()
+        for trip_id in trip_ids:
+            trip_opdays = self.trip_id_to_opdays[trip_id]
+            qualified_opdays.update(filter(criterion, trip_opdays))
+        return qualified_opdays
