@@ -220,7 +220,7 @@ class TripOpDayProvider:
                 if trip_id in self.trip_id_to_opdays:
                     self.trip_id_to_opdays[trip_id] |= opdays
                 else:
-                    self.trip_id_to_opdays[trip_id] = opdays
+                    self.trip_id_to_opdays[trip_id] = set(opdays)
 
     def get_qualified_opdays(
         self: TripOpDayProvider,
