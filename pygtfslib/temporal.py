@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from collections import defaultdict
 import datetime
 import logging
@@ -205,13 +203,15 @@ def read_frequency_timedeltas(directory, frequency_based_log_level=logging.WARNI
 class TripOpDayProvider:
     """Provide information about operating days specific trips run on."""
 
-    def __init__(
-        self: TripOpDayProvider,
-        trip_id_to_opdays: typing.Mapping[str, typing.AbstractSet[datetime.date]],
-    ):
-        self.trip_id_to_opdays = trip_id_to_opdays
+    trip_id_to_opdays: typing.Dict[str, typing.Set[datetime.date]]
 
-    def load_directories(self: TripOpDayProvider, *directories: str):
+    def __init__(
+        self,
+        trip_id_to_opdays: typing.Mapping[str, typing.AbstractSet[datetime.date]],
+    ) -> None:
+        self.trip_id_to_opdays = {k: set(v) for k, v in trip_id_to_opdays.items()}
+
+    def load_directories(self, *directories: str) -> None:
         for directory in directories:
             calendar = read_calendar(directory)
             for row in iter_rows(directory, "trips.txt"):
@@ -223,13 +223,13 @@ class TripOpDayProvider:
                     self.trip_id_to_opdays[trip_id] = set(opdays)
 
     def get_qualified_opdays(
-        self: TripOpDayProvider,
-        trip_ids: str | typing.AbstractSet[str],
+        self,
+        trip_ids: typing.Union[str, typing.AbstractSet[str]],
         criterion: typing.Callable[[datetime.datetime], bool],
-    ) -> set[datetime.datetime]:
+    ) -> typing.Set[datetime.datetime]:
         if isinstance(trip_ids, str):
             trip_ids = {trip_ids}
-        qualified_opdays = set()
+        qualified_opdays: set = set()
         for trip_id in trip_ids:
             trip_opdays = self.trip_id_to_opdays[trip_id]
             qualified_opdays.update(filter(criterion, trip_opdays))
