@@ -4,3 +4,7 @@
 #
 #    pip-compile
 #
+python-dateutil==2.8.2
+    # via pygtfslib (setup.py)
+six==1.16.0
+    # via python-dateutil
