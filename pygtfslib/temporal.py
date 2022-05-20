@@ -229,7 +229,7 @@ class TripOpDayProvider:
     ) -> typing.Set[datetime.datetime]:
         if isinstance(trip_ids, str):
             trip_ids = {trip_ids}
-        qualified_opdays: set = set()
+        qualified_opdays: typing.Set[datetime.datetime] = set()
         for trip_id in trip_ids:
             trip_opdays = self.trip_id_to_opdays[trip_id]
             qualified_opdays.update(filter(criterion, trip_opdays))
