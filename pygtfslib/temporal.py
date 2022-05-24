@@ -3,6 +3,7 @@ import datetime
 import logging
 import math
 from functools import lru_cache
+import typing
 
 from dateutil.tz import tzutc
 from dateutil import rrule
@@ -197,3 +198,39 @@ def read_frequency_timedeltas(directory, frequency_based_log_level=logging.WARNI
     for start_timedeltas in trip_id_to_start_timedeltas.values():
         start_timedeltas.sort()
     return trip_id_to_start_timedeltas
+
+
+class TripOpDayProvider:
+    """Provide information about operating days specific trips run on."""
+
+    trip_id_to_opdays: typing.Dict[str, typing.Set[datetime.date]]
+
+    def __init__(
+        self,
+        trip_id_to_opdays: typing.Mapping[str, typing.AbstractSet[datetime.date]],
+    ) -> None:
+        self.trip_id_to_opdays = {k: set(v) for k, v in trip_id_to_opdays.items()}
+
+    def load_directories(self, *directories: str) -> None:
+        for directory in directories:
+            calendar = read_calendar(directory)
+            for row in iter_rows(directory, "trips.txt"):
+                trip_id = row["trip_id"]
+                opdays = calendar.get(row["service_id"], set())
+                if trip_id in self.trip_id_to_opdays:
+                    self.trip_id_to_opdays[trip_id] |= opdays
+                else:
+                    self.trip_id_to_opdays[trip_id] = set(opdays)
+
+    def get_qualified_opdays(
+        self,
+        trip_ids: typing.Union[str, typing.AbstractSet[str]],
+        criterion: typing.Callable[[datetime.datetime], bool],
+    ) -> typing.Set[datetime.datetime]:
+        if isinstance(trip_ids, str):
+            trip_ids = {trip_ids}
+        qualified_opdays: typing.Set[datetime.datetime] = set()
+        for trip_id in trip_ids:
+            trip_opdays = self.trip_id_to_opdays[trip_id]
+            qualified_opdays.update(filter(criterion, trip_opdays))
+        return qualified_opdays
