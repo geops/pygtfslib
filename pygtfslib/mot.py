@@ -2,18 +2,31 @@ from functools import lru_cache
 import typing
 
 
-GEOPS_TRAM = "tram"
-GEOPS_SUBWAY = "subway"
-GEOPS_RAIL = "rail"
-GEOPS_BUS = "bus"
-GEOPS_FERRY = "ferry"
-GEOPS_CABLECAR = "cablecar"
-GEOPS_GONDOLA = "gondola"
-GEOPS_FUNICULAR = "funicular"
-GEOPS_COACH = "coach"
+T_MOT = typing.Literal[
+    "tram",
+    "subway",
+    "rail",
+    "bus",
+    "ferry",
+    "cablecar",
+    "gondola",
+    "funicular",
+    "coach",
+]
 
 
-_route_type_to_mot = {
+GEOPS_TRAM: T_MOT = "tram"
+GEOPS_SUBWAY: T_MOT = "subway"
+GEOPS_RAIL: T_MOT = "rail"
+GEOPS_BUS: T_MOT = "bus"
+GEOPS_FERRY: T_MOT = "ferry"
+GEOPS_CABLECAR: T_MOT = "cablecar"
+GEOPS_GONDOLA: T_MOT = "gondola"
+GEOPS_FUNICULAR: T_MOT = "funicular"
+GEOPS_COACH: T_MOT = "coach"
+
+
+SIMPLE_ROUTE_TYPE_TO_MOT: typing.Dict[int, T_MOT] = {
     0: GEOPS_TRAM,
     1: GEOPS_SUBWAY,
     2: GEOPS_RAIL,
@@ -28,8 +41,8 @@ _route_type_to_mot = {
 
 @lru_cache(maxsize=512)
 def route_type_to_mot(
-    route_type: int, fallback: typing.Optional[str] = None
-) -> typing.Optional[str]:
+    route_type: int, fallback: typing.Optional[T_MOT] = None
+) -> typing.Optional[T_MOT]:
     """Return geOps routing API mot from GTFS (extended) route type
 
     https://developers.google.com/transit/gtfs/reference/extended-route-types
@@ -50,4 +63,4 @@ def route_type_to_mot(
         route_type = 6
     elif route_type == 1400:
         route_type = 7
-    return _route_type_to_mot.get(route_type) or fallback
+    return SIMPLE_ROUTE_TYPE_TO_MOT.get(route_type) or fallback
