@@ -13,7 +13,7 @@ GEOPS_FUNICULAR = "funicular"
 GEOPS_COACH = "coach"
 
 
-_route_type_to_mot = {
+SIMPLE_ROUTE_TYPE_TO_MOT: typing.Dict[int, str] = {
     0: GEOPS_TRAM,
     1: GEOPS_SUBWAY,
     2: GEOPS_RAIL,
@@ -50,4 +50,4 @@ def route_type_to_mot(
         route_type = 6
     elif route_type == 1400:
         route_type = 7
-    return _route_type_to_mot.get(route_type) or fallback
+    return SIMPLE_ROUTE_TYPE_TO_MOT.get(route_type) or fallback
