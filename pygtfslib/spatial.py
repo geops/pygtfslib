@@ -27,8 +27,8 @@ def read_shapes(
 ) -> typing.Dict[str, _T]:
     """Read shapes.txt as a dict mapping shape id to shape.
 
-    `shape_id` is an optional set for selecting only specific shape ids.
-    The iterable passed to `factory` iterates over ShapeRows of a shape, sorted by sequence.
+    `shape_ids` is an optional set for selecting only specific shape ids.
+    The iterable passed to `factory` iterates over `ShapeRow` of a shape in the correct order.
 
     Attention: Each iterable passed to `factory` is not valid any more once `factory` has returned!
     """
