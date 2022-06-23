@@ -2,7 +2,7 @@ import datetime
 
 from dateutil.tz import gettz
 
-from pygtfslib.temporal import TimeCache
+from pygtfslib.temporal import TimeCache, get_seconds_without_waiting_times
 
 
 def test_time_cache_regular_opday():
@@ -47,3 +47,38 @@ def test_time_cache_dst_switch_opday():
     delta = datetime.timedelta(hours=2, minutes=10, seconds=7)
     result = tc.gtfs_time_to_datetime(opday, delta)
     assert result == datetime.datetime(2022, 3, 27, 1, 10, 7, tzinfo=tz)
+
+
+def test_travel_times():
+    def t(s1, s2):
+        return (
+            datetime.timedelta(seconds=s1) if s1 is not None else None,
+            datetime.timedelta(seconds=s2) if s2 is not None else None,
+        )
+
+    travel_seconds = get_seconds_without_waiting_times(
+        [
+            t(None, 15),
+            t(None, 25),
+            t(None, None),
+            t(45, 70),
+            t(70, None),
+        ]
+    )
+    assert travel_seconds == [0, 10, None, 30, 30]
+
+    travel_seconds = get_seconds_without_waiting_times(
+        [
+            t(16, 15),
+            t(17, 18),
+        ]
+    )
+    assert travel_seconds == [None, None]
+
+    travel_seconds = get_seconds_without_waiting_times(
+        [
+            t(15, 16),
+            t(15, 18),
+        ]
+    )
+    assert travel_seconds == [None, None]

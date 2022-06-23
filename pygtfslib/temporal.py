@@ -82,7 +82,8 @@ def get_seconds_without_waiting_times(
     """
     seconds = []
     last_known_departure = None
-    for arrival, departure in arrival_departure_deltas:
+    deltas = iter(arrival_departure_deltas)
+    for arrival, departure in deltas:
         if arrival is None:
             arrival = departure
         elif departure is None:
@@ -94,14 +95,14 @@ def get_seconds_without_waiting_times(
             logger.debug(
                 "cannot calculate times: departure before arrival at same stop"
             )
-            return [None] * sum((1 for _ in arrival_departure_deltas), len(seconds) + 1)
+            return [None] * sum((1 for _ in deltas), len(seconds) + 1)
         elif last_known_departure is None:
             cumulative_seconds = 0.0 if start_at_zero else departure.total_seconds()
             seconds.append(cumulative_seconds)
             last_known_departure = departure
         elif arrival < last_known_departure:
             logger.debug("cannot calculate times: arrival before last known departure")
-            return [None] * sum((1 for _ in arrival_departure_deltas), len(seconds) + 1)
+            return [None] * sum((1 for _ in deltas), len(seconds) + 1)
         else:
             cumulative_seconds += (arrival - last_known_departure).total_seconds()
             seconds.append(cumulative_seconds)
