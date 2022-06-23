@@ -60,6 +60,55 @@ def parse_deltas(stop_time):
     return arrival_delta, departure_delta
 
 
+def get_seconds_without_waiting_times(
+    arrival_departure_deltas: typing.Iterable[
+        typing.Tuple[
+            typing.Optional[datetime.timedelta], typing.Optional[datetime.timedelta]
+        ]
+    ],
+    start_at_zero: bool = True,
+) -> typing.List[typing.Optional[float]]:
+    """Get arrival/departure times in seconds without waiting times.
+
+    If deltas are not in chronological order, all times will be `None`.
+    Arrival will fall back to departure and vice versa if `None`.
+    If both are `None`, time is assumed to be unknown and the corresponding
+    seconds will be `None`.
+
+    The calculated departure/arrival at the first stop with timing
+    information is 0.0 or its input departure delta in seconds if `start_at_zero` is set to `False`.
+    The default is to always start at 0.0 which is good for dedupliacation of trips that are only
+    shifted in time.
+    """
+    seconds = []
+    last_known_departure = None
+    for arrival, departure in arrival_departure_deltas:
+        if arrival is None:
+            arrival = departure
+        elif departure is None:
+            departure = arrival
+
+        if arrival is None:
+            seconds.append(None)
+        elif departure < arrival:
+            logger.debug(
+                "cannot calculate times: departure before arrival at same stop"
+            )
+            return [None] * sum((1 for _ in arrival_departure_deltas), len(seconds) + 1)
+        elif last_known_departure is None:
+            cumulative_seconds = 0.0 if start_at_zero else departure.total_seconds()
+            seconds.append(cumulative_seconds)
+            last_known_departure = departure
+        elif arrival < last_known_departure:
+            logger.debug("cannot calculate times: arrival before last known departure")
+            return [None] * sum((1 for _ in arrival_departure_deltas), len(seconds) + 1)
+        else:
+            cumulative_seconds += (arrival - last_known_departure).total_seconds()
+            seconds.append(cumulative_seconds)
+            last_known_departure = departure
+    return seconds
+
+
 def utc_datetime(date, unaware_local_time, timezone):
     unaware_dt = datetime.datetime.combine(date, unaware_local_time)
     aware_dt = unaware_dt.replace(tzinfo=timezone)
@@ -206,8 +255,7 @@ class TripOpDayProvider:
     trip_id_to_opdays: typing.Dict[str, typing.Set[datetime.date]]
 
     def __init__(
-        self,
-        trip_id_to_opdays: typing.Mapping[str, typing.AbstractSet[datetime.date]],
+        self, trip_id_to_opdays: typing.Mapping[str, typing.AbstractSet[datetime.date]]
     ) -> None:
         self.trip_id_to_opdays = {k: set(v) for k, v in trip_id_to_opdays.items()}
 
