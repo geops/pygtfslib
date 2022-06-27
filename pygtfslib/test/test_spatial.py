@@ -38,6 +38,12 @@ def test_read_shapes():
         iter_rows_mock.return_value = (row for row in rows)
         shapes = read_shapes("", factory=list)
     assert shapes == {
-        "1": [ShapeRow(10.1, 20.2, None), ShapeRow(30.3, 40.4, 200.2)],
-        "2": [ShapeRow(50.5, 60.6, 300.3), ShapeRow(70.7, 80.8, None)],
+        "1": [
+            ShapeRow(lat=10.1, lon=20.2, distance=None),
+            ShapeRow(lat=30.3, lon=40.4, distance=200.2),
+        ],
+        "2": [
+            ShapeRow(lat=50.5, lon=60.6, distance=300.3),
+            ShapeRow(lat=70.7, lon=80.8, distance=None),
+        ],
     }
