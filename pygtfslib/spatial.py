@@ -6,8 +6,8 @@ from .fast_csv import iter_rows
 
 
 class ShapeRow(typing.NamedTuple):
-    lat: float
     lon: float
+    lat: float
     distance: typing.Optional[float]
 
 
@@ -37,8 +37,8 @@ def read_shapes(
             row["shape_id"],
             int(row["shape_pt_sequence"]),
             ShapeRow(
-                float(row["shape_pt_lat"]),
                 float(row["shape_pt_lon"]),
+                float(row["shape_pt_lat"]),
                 float(row["shape_dist_traveled"])
                 if row.get("shape_dist_traveled")
                 else None,
