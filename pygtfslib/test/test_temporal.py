@@ -2,7 +2,7 @@ import datetime
 
 from dateutil.tz import gettz
 
-from pygtfslib.temporal import TimeCache, get_seconds_without_waiting_times
+from pygtfslib.temporal import TimeCache, get_seconds_without_waiting_times, StopTime
 
 
 def test_time_cache_regular_opday():
@@ -50,35 +50,39 @@ def test_time_cache_dst_switch_opday():
 
 
 def test_travel_times():
-    def t(s1, s2):
-        return (
-            datetime.timedelta(seconds=s1) if s1 is not None else None,
-            datetime.timedelta(seconds=s2) if s2 is not None else None,
+    def st(s1, s2):
+        stop_time = StopTime.__new__(StopTime)
+        stop_time.arrival_time = (
+            datetime.timedelta(seconds=s1) if s1 is not None else None
         )
+        stop_time.departure_time = (
+            datetime.timedelta(seconds=s2) if s2 is not None else None
+        )
+        return stop_time
 
     travel_seconds = get_seconds_without_waiting_times(
         [
-            t(None, 15),
-            t(None, 25),
-            t(None, None),
-            t(45, 70),
-            t(70, None),
+            st(None, 15),
+            st(None, 25),
+            st(None, None),
+            st(45, 70),
+            st(70, None),
         ]
     )
     assert travel_seconds == [0, 10, None, 30, 30]
 
     travel_seconds = get_seconds_without_waiting_times(
         [
-            t(16, 15),
-            t(17, 18),
+            st(16, 15),
+            st(17, 18),
         ]
     )
     assert travel_seconds == [None, None]
 
     travel_seconds = get_seconds_without_waiting_times(
         [
-            t(15, 16),
-            t(15, 18),
+            st(15, 16),
+            st(15, 18),
         ]
     )
     assert travel_seconds == [None, None]

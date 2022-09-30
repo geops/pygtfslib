@@ -4,11 +4,13 @@ import logging
 import math
 from functools import lru_cache
 import typing
+import itertools
+from operator import attrgetter
 
 from dateutil.tz import tzutc
 from dateutil import rrule
 
-from .fast_csv import iter_rows
+from .fast_csv import iter_rows, iter_rows_as_namedtuples
 
 
 logger = logging.getLogger(__name__)
@@ -47,39 +49,15 @@ def parse_timedelta(value):
     return datetime.timedelta(hours=hours, minutes=minutes, seconds=seconds)
 
 
-def parse_deltas(stop_time):
-    return parse_delta_strings(stop_time["arrival_time"], stop_time["departure_time"])
-
-
-def parse_deltas_namedtuple(stop_time):
-    return parse_delta_strings(stop_time.arrival_time, stop_time.departure_time)
-
-
-def parse_delta_strings(arrival_str, departure_str):
-    arrival_delta = parse_timedelta(arrival_str)
-    departure_delta = parse_timedelta(departure_str)
-
-    if arrival_delta is None:
-        arrival_delta = departure_delta
-    if departure_delta is None:
-        departure_delta = arrival_delta
-
-    return arrival_delta, departure_delta
-
-
 def get_seconds_without_waiting_times(
-    arrival_departure_deltas: typing.Iterable[
-        typing.Tuple[
-            typing.Optional[datetime.timedelta], typing.Optional[datetime.timedelta]
-        ]
-    ],
+    stop_times: typing.Iterable["StopTime"],
     start_at_zero: bool = True,
 ) -> typing.List[typing.Optional[float]]:
     """Get arrival/departure times in seconds without waiting times.
 
-    If deltas are not in chronological order, all times will be `None`.
+    If stop times are not in chronological order, all times will be `None`.
     Arrival will fall back to departure and vice versa if `None`.
-    If both are `None`, time is assumed to be unknown and the corresponding
+    If both arrival and departure are `None`, time is assumed to be unknown and the corresponding
     seconds will be `None`.
 
     The calculated departure/arrival at the first stop with timing
@@ -87,29 +65,27 @@ def get_seconds_without_waiting_times(
     The default is to always start at 0.0 which is good for dedupliacation of trips that are only
     shifted in time.
     """
-    seconds = []
+    seconds: typing.List[typing.Optional[float]] = []
     last_known_departure = None
-    deltas = iter(arrival_departure_deltas)
-    for arrival, departure in deltas:
-        if arrival is None:
-            arrival = departure
-        elif departure is None:
-            departure = arrival
-
-        if arrival is None:
+    iter_stop_times = iter(stop_times)
+    for st in iter_stop_times:
+        arrival = st.arrival_or_departure_time
+        departure = st.departure_or_arrival_time
+        # or is not needed but makes mypy happy
+        if arrival is None or departure is None:
             seconds.append(None)
         elif departure < arrival:
             logger.debug(
                 "cannot calculate times: departure before arrival at same stop"
             )
-            return [None] * sum((1 for _ in deltas), len(seconds) + 1)
+            return [None] * sum((1 for _ in iter_stop_times), len(seconds) + 1)
         elif last_known_departure is None:
             cumulative_seconds = 0.0 if start_at_zero else departure.total_seconds()
             seconds.append(cumulative_seconds)
             last_known_departure = departure
         elif arrival < last_known_departure:
             logger.debug("cannot calculate times: arrival before last known departure")
-            return [None] * sum((1 for _ in deltas), len(seconds) + 1)
+            return [None] * sum((1 for _ in iter_stop_times), len(seconds) + 1)
         else:
             cumulative_seconds += (arrival - last_known_departure).total_seconds()
             seconds.append(cumulative_seconds)
@@ -290,3 +266,96 @@ class TripOpDayProvider:
             trip_opdays = self.trip_id_to_opdays[trip_id]
             qualified_opdays.update(filter(criterion, trip_opdays))
         return qualified_opdays
+
+
+_TOptionalStr = typing.TypeVar("_TOptionalStr", bound=typing.Optional[str])
+
+
+class StopTime:
+    __slots__ = (
+        "trip_id",
+        "stop_sequence",
+        "arrival_time",
+        "departure_time",
+        "stop_id",
+        "stop_headsign",
+        "pickup_type",
+        "drop_off_type",
+        "shape_dist_traveled",
+        "timepoint",
+    )
+
+    trip_id: str
+    stop_sequence: int
+    arrival_time: typing.Optional[datetime.timedelta]
+    departure_time: typing.Optional[datetime.timedelta]
+    stop_id: str
+    stop_headsign: typing.Optional[str]
+    pickup_type: int
+    drop_off_type: int
+    shape_dist_traveled: typing.Optional[float]
+    timepoint: int
+
+    def __init__(
+        self,
+        row: typing.Any,
+        str_cache: typing.Callable[[_TOptionalStr], _TOptionalStr] = lambda s: s,
+    ) -> None:
+        if row.trip_id is None:
+            raise ValueError("missing trip_id for row %r", row)
+        self.trip_id = typing.cast(str, str_cache(row.trip_id))
+        self.stop_sequence = int(row.stop_sequence)
+        self.arrival_time = parse_timedelta(row.arrival_time)
+        self.departure_time = parse_timedelta(row.departure_time)
+        if row.stop_id is None:
+            raise ValueError("missing stop_id for row %r")
+        self.stop_id = typing.cast(str, str_cache(row.stop_id))
+        self.stop_headsign = str_cache(row.stop_headsign)
+        self.pickup_type = int(row.pickup_type or 0)
+        self.drop_off_type = int(row.drop_off_type or 0)
+        self.shape_dist_traveled = (
+            float(row.shape_dist_traveled) if row.shape_dist_traveled else None
+        )
+        self.timepoint = int(row.timepoint or 1)
+
+    @property
+    def arrival_or_departure_time(self) -> typing.Optional[datetime.timedelta]:
+        return self.departure_time if self.arrival_time is None else self.arrival_time
+
+    @property
+    def departure_or_arrival_time(self) -> typing.Optional[datetime.timedelta]:
+        return self.arrival_time if self.departure_time is None else self.departure_time
+
+
+def read_stop_times(
+    directory: str,
+    trip_ids: typing.Optional[typing.AbstractSet[str]] = None,
+) -> typing.Dict[str, typing.List[StopTime]]:
+    """Read stop_times.txt as a dict mapping trip id to list of StopTimes.
+
+    `trip_ids` is an optional set for selecting only specific trip ids.
+    """
+    iter_rows = iter_rows_as_namedtuples(
+        directory,
+        "stop_times.txt",
+        optional_fieldnames=[
+            "pickup_type",
+            "drop_off_type",
+            "timepoint",
+            "stop_headsign",
+        ],
+    )
+    str_cache = lru_cache(maxsize=None)(lambda s: s)
+    if trip_ids is not None:
+        rows = [
+            StopTime(row, str_cache) for row in iter_rows if row.trip_id in trip_ids
+        ]
+    else:
+        rows = [StopTime(row, str_cache) for row in iter_rows]
+    del str_cache
+    logger.info("sorting stop times ...")
+    rows.sort(key=lambda row: (row.trip_id, int(row.stop_sequence)))
+    return {
+        trip_id: list(group)
+        for trip_id, group in itertools.groupby(rows, key=attrgetter("trip_id"))
+    }
