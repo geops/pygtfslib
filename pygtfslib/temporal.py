@@ -48,9 +48,16 @@ def parse_timedelta(value):
 
 
 def parse_deltas(stop_time):
-    st = stop_time
-    arrival_delta = parse_timedelta(st.get("arrival_time"))
-    departure_delta = parse_timedelta(st.get("departure_time"))
+    return parse_delta_strings(stop_time["arrival_time"], stop_time["departure_time"])
+
+
+def parse_deltas_namedtuple(stop_time):
+    return parse_delta_strings(stop_time.arrival_time, stop_time.departure_time)
+
+
+def parse_delta_strings(arrival_str, departure_str):
+    arrival_delta = parse_timedelta(arrival_str)
+    departure_delta = parse_timedelta(departure_str)
 
     if arrival_delta is None:
         arrival_delta = departure_delta
