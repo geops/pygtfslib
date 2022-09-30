@@ -347,15 +347,15 @@ def read_stop_times(
     )
     str_cache = lru_cache(maxsize=None)(lambda s: s)
     if trip_ids is not None:
-        rows = [
+        stop_times = [
             StopTime(row, str_cache) for row in iter_rows if row.trip_id in trip_ids
         ]
     else:
-        rows = [StopTime(row, str_cache) for row in iter_rows]
+        stop_times = [StopTime(row, str_cache) for row in iter_rows]
     del str_cache
     logger.info("sorting stop times ...")
-    rows.sort(key=lambda row: (row.trip_id, int(row.stop_sequence)))
+    stop_times.sort(key=attrgetter("trip_id", "stop_sequence"))
     return {
         trip_id: list(group)
-        for trip_id, group in itertools.groupby(rows, key=attrgetter("trip_id"))
+        for trip_id, group in itertools.groupby(stop_times, key=attrgetter("trip_id"))
     }
