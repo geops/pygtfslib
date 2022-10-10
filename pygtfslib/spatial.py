@@ -28,7 +28,7 @@ def read_shapes(
     Attention: Each iterable passed to `factory` is not valid any more once `factory` has returned!
 
     If `assume_sorted` is set to `True`, it is assumed that the rows in shapes.txt are sorted by
-    shape_id and shape_pt_sequence. No check is performed if data is really sorted.
+    shape_id and shape_pt_sequence. No check is performed whether data is really sorted.
     """
     iter_file_rows = iter_rows_as_namedtuples(
         directory, "shapes.txt", optional_fieldnames=["shape_dist_traveled"]
