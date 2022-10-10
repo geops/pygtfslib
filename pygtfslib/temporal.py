@@ -302,13 +302,13 @@ class StopTime:
         str_cache: typing.Callable[[_TOptionalStr], _TOptionalStr] = lambda s: s,
     ) -> None:
         if row.trip_id is None:
-            raise ValueError("missing trip_id for row %r", row)
+            raise ValueError(f"missing trip_id for row {row!r}")
         self.trip_id = typing.cast(str, str_cache(row.trip_id))
         self.stop_sequence = int(row.stop_sequence)
         self.arrival_time = parse_timedelta(row.arrival_time)
         self.departure_time = parse_timedelta(row.departure_time)
         if row.stop_id is None:
-            raise ValueError("missing stop_id for row %r")
+            raise ValueError(f"missing stop_id for row {row!r}")
         self.stop_id = typing.cast(str, str_cache(row.stop_id))
         self.stop_headsign = str_cache(row.stop_headsign)
         self.pickup_type = int(row.pickup_type or 0)
