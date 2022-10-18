@@ -339,6 +339,9 @@ def read_stop_times(
         directory,
         "stop_times.txt",
         optional_fieldnames=[
+            "arrival_time",
+            "departure_time",
+            "shape_dist_traveled",
             "pickup_type",
             "drop_off_type",
             "timepoint",
