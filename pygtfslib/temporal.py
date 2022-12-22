@@ -257,11 +257,11 @@ class TripOpDayProvider:
     def get_qualified_opdays(
         self,
         trip_ids: typing.Union[str, typing.AbstractSet[str]],
-        criterion: typing.Callable[[datetime.datetime], bool],
-    ) -> typing.Set[datetime.datetime]:
+        criterion: typing.Callable[[datetime.date], bool],
+    ) -> typing.Set[datetime.date]:
         if isinstance(trip_ids, str):
             trip_ids = {trip_ids}
-        qualified_opdays: typing.Set[datetime.datetime] = set()
+        qualified_opdays: typing.Set[datetime.date] = set()
         for trip_id in trip_ids:
             trip_opdays = self.trip_id_to_opdays[trip_id]
             qualified_opdays.update(filter(criterion, trip_opdays))

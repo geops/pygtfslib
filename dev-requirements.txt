@@ -37,8 +37,12 @@ iniconfig==1.1.1
     # via pytest
 mccabe==0.6.1
     # via flake8
+mypy==0.991
+    # via -r dev-requirements.in
 mypy-extensions==0.4.3
-    # via black
+    # via
+    #   black
+    #   mypy
 nodeenv==1.6.0
     # via pre-commit
 packaging==21.3
@@ -68,7 +72,10 @@ pyparsing==3.0.9
 pytest==7.1.2
     # via
     #   -r dev-requirements.in
+    #   pytest-asyncio
     #   pytest-cov
+pytest-asyncio==0.20.3
+    # via -r dev-requirements.in
 pytest-cov==3.0.0
     # via -r dev-requirements.in
 pyyaml==6.0
@@ -83,14 +90,19 @@ tomli==2.0.1
     # via
     #   black
     #   coverage
+    #   mypy
     #   pep517
     #   pytest
 typed-ast==1.5.3
-    # via black
+    # via
+    #   black
+    #   mypy
 typing-extensions==4.2.0
     # via
     #   black
     #   importlib-metadata
+    #   mypy
+    #   pytest-asyncio
 virtualenv==20.14.1
     # via pre-commit
 wheel==0.37.1

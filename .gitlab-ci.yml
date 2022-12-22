@@ -19,6 +19,7 @@ before_script:
 stages:
   - build
   - test
+  - deploy
 
 cache:
   paths:
@@ -27,7 +28,7 @@ cache:
 build_wheels:
   stage: build
   script:
-    - pip wheel -w wheels -r requirements.txt
+    - pip wheel -w wheels -r requirements.txt pip wheel setuptools setuptools-scm
     - pip wheel --no-index --find-links=wheels -w wheels .
     - pip wheel --find-links=wheels -w dev-wheels -r dev-requirements.txt
   artifacts:
@@ -42,8 +43,8 @@ run_tests:
     - build_wheels
   script:
     - pip install --no-index --no-deps wheels/*
-    - pip install --no-index --find-links=dev-wheels pytest pytest-cov
-    - pytest -s -vvv --log-cli-level INFO --cov=pygtfslib --cov-config=setup.cfg pygtfslib
+    - pip install --no-index --no-deps dev-wheels/*
+    - pytest -s -vvv --log-cli-level INFO
 
 run_pre_commit_checks:
   stage: test
