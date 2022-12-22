@@ -1,8 +1,8 @@
 -c requirements.txt
+virtualenv<=20.16.2
 flake8
 pytest
 pytest-cov
-pytest-asyncio
 pre-commit
 pip-tools
 mypy
