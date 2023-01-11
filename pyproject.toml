@@ -1,4 +1,16 @@
+[project]
+name = "pygtfslib"
+description = "A Python Library for GTFS"
+readme = "README.md"
+dependencies = ["python-dateutil"]
+requires-python = ">=3.7"
+dynamic = ["version"]
+
 [build-system]
-requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2", "wheel"]
+requires = ["setuptools>=61", "setuptools_scm[toml]>=6.2", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
+
+[tool.setuptools.packages.find]
+include = ["pygtfslib", "pygtfslib.*"]
