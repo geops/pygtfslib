@@ -7,7 +7,16 @@ from itertools import starmap
 logger = logging.getLogger(__name__)
 
 
+# TODO: provide a more user-friendly interface (context manager) for better control
+# of lifetime of file handles
+
+
 def iter_rows(directory, filename):
+    """Iterate over a CSV file yielding rows as dicts.
+
+    Attention: The file handle will only close once the generator is consumed
+    or closed explicitly!
+    """
     path = os.path.join(directory, filename)
     logger.info("reading from %r ...", path)
     with open(path, newline="", encoding="utf-8-sig") as handle:
@@ -18,6 +27,11 @@ def iter_rows(directory, filename):
 
 
 def iter_rows_as_namedtuples(directory, filename, optional_fieldnames=()):
+    """Iterate over a CSV file yielding rows as namedtuples.
+
+    Attention: The file handle will only close once the generator is consumed
+    or closed explicitly!
+    """
     path = os.path.join(directory, filename)
     logger.info("reading from %r ...", path)
     with open(path, newline="", encoding="utf-8-sig") as handle:
