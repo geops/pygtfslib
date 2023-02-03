@@ -267,6 +267,19 @@ class TripOpDayProvider:
             qualified_opdays.update(filter(criterion, trip_opdays))
         return qualified_opdays
 
+    def has_qualified_opdays(
+        self,
+        trip_ids: typing.Union[str, typing.AbstractSet[str]],
+        criterion: typing.Callable[[datetime.date], bool],
+    ) -> bool:
+        if isinstance(trip_ids, str):
+            trip_ids = {trip_ids}
+        for trip_id in trip_ids:
+            trip_opdays = self.trip_id_to_opdays[trip_id]
+            if any(filter(criterion, trip_opdays)):  # type: ignore
+                return True
+        return False
+
 
 _TOptionalStr = typing.TypeVar("_TOptionalStr", bound=typing.Optional[str])
 
