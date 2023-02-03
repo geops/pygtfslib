@@ -276,7 +276,7 @@ class TripOpDayProvider:
             trip_ids = {trip_ids}
         for trip_id in trip_ids:
             trip_opdays = self.trip_id_to_opdays[trip_id]
-            if any(filter(criterion, trip_opdays)):  # type: ignore
+            if any(map(criterion, trip_opdays)):
                 return True
         return False
 
