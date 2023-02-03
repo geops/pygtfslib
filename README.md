@@ -93,5 +93,5 @@ to update frozen revs.
 Run tests and analyze code coverage:
 
 ```bash
-pytest --cov=pygtfslib --cov-report term --cov-fail-under=35 pygtfslib
+pytest --cov=pygtfslib --cov-report term --cov-fail-under=40 pygtfslib
 ```
