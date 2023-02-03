@@ -2,7 +2,12 @@ import datetime
 
 from dateutil.tz import gettz
 
-from pygtfslib.temporal import TimeCache, get_seconds_without_waiting_times, StopTime
+from pygtfslib.temporal import (
+    TimeCache,
+    get_seconds_without_waiting_times,
+    StopTime,
+    TripOpDayProvider,
+)
 
 
 def test_time_cache_regular_opday():
@@ -86,3 +91,24 @@ def test_travel_times():
         ]
     )
     assert travel_seconds == [None, None]
+
+
+def test_trip_opday_provider():
+    d1 = datetime.date(2023, 2, 1)
+    d2 = datetime.date(2023, 2, 2)
+    d3 = datetime.date(2023, 2, 3)
+    d4 = datetime.date(2023, 2, 4)
+    trip_id_to_opdays = {"A": {d1, d2, d3}, "B": {d1, d4}, "C": {d2}}
+    provider = TripOpDayProvider(trip_id_to_opdays)
+
+    def criterion(d: datetime.date) -> bool:
+        return d in {d1, d4}
+
+    assert provider.get_qualified_opdays({"A", "B", "C"}, criterion) == {d1, d4}
+    assert provider.has_qualified_opdays({"A", "B", "C"}, criterion)
+
+    assert provider.get_qualified_opdays({"A"}, criterion) == {d1}
+    assert provider.has_qualified_opdays({"A"}, criterion)
+
+    assert provider.get_qualified_opdays("C", criterion) == set()
+    assert not provider.has_qualified_opdays("C", criterion)
