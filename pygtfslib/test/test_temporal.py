@@ -94,21 +94,27 @@ def test_travel_times():
 
 
 def test_trip_opday_provider():
-    d1 = datetime.date(2023, 2, 1)
-    d2 = datetime.date(2023, 2, 2)
-    d3 = datetime.date(2023, 2, 3)
-    d4 = datetime.date(2023, 2, 4)
-    trip_id_to_opdays = {"A": {d1, d2, d3}, "B": {d1, d4}, "C": {d2}}
+    feb_1st = datetime.date(2023, 2, 1)
+    feb_2nd = datetime.date(2023, 2, 2)
+    feb_3rd = datetime.date(2023, 2, 3)
+    feb_4th = datetime.date(2023, 2, 4)
+    trip_id_to_opdays = {
+        "A": {feb_1st, feb_2nd, feb_3rd},
+        "B": {feb_1st, feb_4th},
+        "C": {feb_2nd},
+    }
     provider = TripOpDayProvider(trip_id_to_opdays)
 
-    def criterion(d: datetime.date) -> bool:
-        return d in {d1, d4}
+    def is_feb_1st_or_4th(d: datetime.date) -> bool:
+        return d in {feb_1st, feb_4th}
 
-    assert provider.get_qualified_opdays({"A", "B", "C"}, criterion) == {d1, d4}
-    assert provider.has_qualified_opdays({"A", "B", "C"}, criterion)
+    assert provider.get_qualified_opdays(
+        trip_id_to_opdays.keys(), is_feb_1st_or_4th
+    ) == {feb_1st, feb_4th}
+    assert provider.has_qualified_opdays(trip_id_to_opdays.keys(), is_feb_1st_or_4th)
 
-    assert provider.get_qualified_opdays({"A"}, criterion) == {d1}
-    assert provider.has_qualified_opdays({"A"}, criterion)
+    assert provider.get_qualified_opdays({"A"}, is_feb_1st_or_4th) == {feb_1st}
+    assert provider.has_qualified_opdays({"A"}, is_feb_1st_or_4th)
 
-    assert provider.get_qualified_opdays("C", criterion) == set()
-    assert not provider.has_qualified_opdays("C", criterion)
+    assert provider.get_qualified_opdays("C", is_feb_1st_or_4th) == set()
+    assert not provider.has_qualified_opdays("C", is_feb_1st_or_4th)
