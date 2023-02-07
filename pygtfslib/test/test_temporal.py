@@ -2,7 +2,12 @@ import datetime
 
 from dateutil.tz import gettz
 
-from pygtfslib.temporal import TimeCache, get_seconds_without_waiting_times, StopTime
+from pygtfslib.temporal import (
+    TimeCache,
+    get_seconds_without_waiting_times,
+    StopTime,
+    TripOpDayProvider,
+)
 
 
 def test_time_cache_regular_opday():
@@ -86,3 +91,30 @@ def test_travel_times():
         ]
     )
     assert travel_seconds == [None, None]
+
+
+def test_trip_opday_provider():
+    feb_1st = datetime.date(2023, 2, 1)
+    feb_2nd = datetime.date(2023, 2, 2)
+    feb_3rd = datetime.date(2023, 2, 3)
+    feb_4th = datetime.date(2023, 2, 4)
+    trip_id_to_opdays = {
+        "A": {feb_1st, feb_2nd, feb_3rd},
+        "B": {feb_1st, feb_4th},
+        "C": {feb_2nd},
+    }
+    provider = TripOpDayProvider(trip_id_to_opdays)
+
+    def is_feb_1st_or_4th(d: datetime.date) -> bool:
+        return d in {feb_1st, feb_4th}
+
+    assert provider.get_qualified_opdays(
+        trip_id_to_opdays.keys(), is_feb_1st_or_4th
+    ) == {feb_1st, feb_4th}
+    assert provider.has_qualified_opdays(trip_id_to_opdays.keys(), is_feb_1st_or_4th)
+
+    assert provider.get_qualified_opdays({"A"}, is_feb_1st_or_4th) == {feb_1st}
+    assert provider.has_qualified_opdays({"A"}, is_feb_1st_or_4th)
+
+    assert provider.get_qualified_opdays("C", is_feb_1st_or_4th) == set()
+    assert not provider.has_qualified_opdays("C", is_feb_1st_or_4th)
