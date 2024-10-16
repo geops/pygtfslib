@@ -36,7 +36,7 @@ UTC = tzutc()
 def parse_date(value):
     if not value:
         return None
-    return datetime.datetime.strptime(value, "%Y%m%d").date()
+    return datetime.datetime.strptime(value.strip(), "%Y%m%d").date()
 
 
 # this is slow, we cache at least 24 * 60 minutes
