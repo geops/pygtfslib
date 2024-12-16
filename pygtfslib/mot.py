@@ -34,17 +34,17 @@ def route_type_to_mot(
 
     https://developers.google.com/transit/gtfs/reference/extended-route-types
     """
-    if 100 <= route_type <= 117:
+    if 100 <= route_type <= 117 or route_type == 1503:
         route_type = 2
     elif 200 <= route_type <= 209:
         route_type = 200
     elif 400 <= route_type <= 405:
         route_type = 1
-    elif 700 <= route_type <= 716:
+    elif 700 <= route_type <= 716 or route_type in {1500, 1501, 1505, 1506, 1507}:
         route_type = 3
     elif 900 <= route_type <= 906:
         route_type = 0
-    elif route_type == 1000 or route_type == 1200:
+    elif route_type in {1000, 1200, 1502}:
         route_type = 4
     elif route_type == 1300:
         route_type = 6
