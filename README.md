@@ -30,7 +30,10 @@ a generic factory that accepts an iterable of `pygtfslib.spatial.ShapeRow` insta
 The `pygtfslib.temporal` module contains classes and functions related to temporal data.
 So far, it provides functions to parse calendar and frequency entries and stop times.
 It also provides a `TimeCache` class that accelerates conversion of GTFS timezone, operating day
-and time delta to a timezone-aware python `datetime.datetime`.
+and time delta to a timezone-aware python `datetime.datetime` and back. Converting back shifts the
+operating day if needed since GTFS cannot express negative times or times of 100 hours or more.
+GTFS times can be parsed and formatted with the cached `parse_timedelta` and `format_timedelta`
+functions.
 
 ### MOT
 
