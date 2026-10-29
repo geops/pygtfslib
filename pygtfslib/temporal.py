@@ -32,8 +32,8 @@ ONE_DAY = datetime.timedelta(days=1)
 # GTFS times have only two digits for the hour,
 # so 100 hours and more cannot be expressed
 MIN_INVALID_GTFS_TIMEDELTA = datetime.timedelta(hours=100)
-# shifting the operating day by more days than this is not a fix for bad data
-MAX_OPDAY_SHIFT = 7
+# shifting the operating day by more days than this is not a fix for bad data by default
+DEFAULT_MAX_OPDAY_SHIFT = 2
 
 
 class OpDayTime(typing.NamedTuple):
@@ -151,7 +151,10 @@ class TimeCache:
         return self.get_reference_datetime(opday) + delta
 
     def datetime_to_gtfs_time(
-        self, opday: datetime.date, dt: datetime.datetime
+        self,
+        opday: datetime.date,
+        dt: datetime.datetime,
+        max_opday_shift: int = DEFAULT_MAX_OPDAY_SHIFT,
     ) -> OpDayTime:
         """Convert an aware datetime to an operating day and a GTFS timedelta.
 
@@ -168,22 +171,26 @@ class TimeCache:
         operating day with a DST switch that moves the clock backwards since the GTFS
         reference time of such a day is one hour after midnight.
 
-        Raise `ValueError` if shifting the operating day by at most `MAX_OPDAY_SHIFT`
+        Raise `ValueError` if shifting the operating day by at most ``max_opday_shift``
         days does not give a timedelta in the valid range.
         """
         delta = dt - self.get_reference_datetime(opday)
         if ZERO_TIMEDELTA <= delta < MIN_INVALID_GTFS_TIMEDELTA:
             return OpDayTime(opday, delta)
-        return self._shift_opday(opday, dt, delta)
+        return self._shift_opday(opday, dt, delta, max_opday_shift)
 
     def _shift_opday(
-        self, opday: datetime.date, dt: datetime.datetime, delta: datetime.timedelta
+        self,
+        opday: datetime.date,
+        dt: datetime.datetime,
+        delta: datetime.timedelta,
+        max_opday_shift: int,
     ) -> OpDayTime:
         original_opday, original_delta = opday, delta
         # shifting the operating day by one day shifts the timedelta by about 24 hours
         # in the opposite direction, so the valid range is reached after a few steps
         step = ONE_DAY if delta >= MIN_INVALID_GTFS_TIMEDELTA else -ONE_DAY
-        for _ in range(MAX_OPDAY_SHIFT):
+        for _ in range(max_opday_shift):
             opday += step
             delta = dt - self.get_reference_datetime(opday)
             if ZERO_TIMEDELTA <= delta < MIN_INVALID_GTFS_TIMEDELTA:
@@ -198,7 +205,7 @@ class TimeCache:
                 return OpDayTime(opday, delta)
         raise ValueError(
             f"cannot express {dt} as a GTFS time of an operating day "
-            f"within {MAX_OPDAY_SHIFT} days of {original_opday}"
+            f"within {max_opday_shift} days of {original_opday}"
         )
 
 

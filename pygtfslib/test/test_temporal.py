@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from pygtfslib.temporal import (
-    MAX_OPDAY_SHIFT,
+    DEFAULT_MAX_OPDAY_SHIFT,
     StopTime,
     TimeCache,
     TripOpDayProvider,
@@ -122,7 +122,9 @@ def test_datetime_to_gtfs_time_shifts_too_large_timedelta(
 def test_datetime_to_gtfs_time_gives_up_eventually() -> None:
     tc = TimeCache(ZoneInfo("Europe/Berlin"))
     opday = datetime.date(2022, 5, 18)
-    dt = tc.gtfs_time_to_datetime(opday, datetime.timedelta(days=MAX_OPDAY_SHIFT + 5))
+    dt = tc.gtfs_time_to_datetime(
+        opday, datetime.timedelta(days=DEFAULT_MAX_OPDAY_SHIFT + 5)
+    )
 
     with pytest.raises(ValueError, match="cannot express"):
         tc.datetime_to_gtfs_time(opday, dt)
