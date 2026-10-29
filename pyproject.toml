@@ -84,7 +84,7 @@ non_interactive = false
 
 [tool.pytest]
 
-[too.coverage.run]
+[tool.coverage.run]
 branch = true
 source = ["pygtfslib"]
 omit = [
