@@ -1,6 +1,4 @@
 from functools import lru_cache
-import typing
-
 
 GEOPS_TRAM = "tram"
 GEOPS_SUBWAY = "subway"
@@ -13,7 +11,7 @@ GEOPS_FUNICULAR = "funicular"
 GEOPS_COACH = "coach"
 
 
-SIMPLE_ROUTE_TYPE_TO_MOT: typing.Dict[int, str] = {
+SIMPLE_ROUTE_TYPE_TO_MOT: dict[int, str] = {
     0: GEOPS_TRAM,
     1: GEOPS_SUBWAY,
     2: GEOPS_RAIL,
@@ -27,9 +25,7 @@ SIMPLE_ROUTE_TYPE_TO_MOT: typing.Dict[int, str] = {
 
 
 @lru_cache(maxsize=512)
-def route_type_to_mot(
-    route_type: int, fallback: typing.Optional[str] = None
-) -> typing.Optional[str]:
+def route_type_to_mot(route_type: int, fallback: str | None = None) -> str | None:
     """Return geOps routing API mot from GTFS (extended) route type
 
     https://developers.google.com/transit/gtfs/reference/extended-route-types

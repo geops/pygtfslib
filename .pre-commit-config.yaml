@@ -1,7 +1,7 @@
-fail_fast: false
+fail_fast: true
 repos:
 - repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: v4.4.0
+  rev: v6.0.0
   hooks:
     - id: no-commit-to-branch
     - id: check-merge-conflict
@@ -12,38 +12,32 @@ repos:
     - id: check-builtin-literals
     - id: check-case-conflict
     - id: check-docstring-first
-- repo: https://github.com/asottile/pyupgrade
-  rev: v3.3.1
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.17.3
   hooks:
-   - id: pyupgrade
-     args: [--py37-plus]
+    - id: ruff
+      args: [ --fix ]
+    - id: ruff-format
+- repo: https://github.com/astral-sh/uv-pre-commit
+  rev: 0.13.6
+  hooks:
+    - id: uv-lock
+      files: ^pyproject.toml|uv.lock$
 - repo: local
   hooks:
-    - id: black
-      name: black
-      entry: black
-      language: python
-      files: '.*\.py$'
-    - id: flake8
-      name: flake8
-      entry: flake8
-      language: python
-      pass_filenames: false
     - id: mypy
       name: mypy
-      entry: mypy
-      language: python
+      # gitlab job syncs explicitly without building extensions
+      # and for local dev we assume synced
+      entry: uv run --no-sync mypy
+      # We need installed dependencies for mypy, so we can't use an isolated env. This
+      # could be fixed by using ty instead which is capable of resolving dependencies on
+      # its own (mypy and pyright can't do that).
+      language: system
+      # don't pass file names, so we detect errors in B when only A changed but B
+      # imports A
       pass_filenames: false
-      files: '.*\.py$'
-    - id: pip-compile
-      name: pip-compile
-      entry: pip-compile pyproject.toml
-      language: python
-      pass_filenames: false
-      files: 'pyproject\.toml|requirements\.txt'
-    - id: pip-compile-dev-requirements
-      name: pip-compile-dev-requirements
-      entry: pip-compile dev-requirements.in
-      language: python
-      pass_filenames: false
-      files: '(dev-)?requirements\.(in|txt)'
+      # always run instead of a python file filter, so we detect errors in B when A gets
+      # deleted but B imports A
+      always_run: true
+      args: ["-p", "pygtfslib"]
