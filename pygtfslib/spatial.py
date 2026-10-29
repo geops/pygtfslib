@@ -1,5 +1,5 @@
-import typing
 import itertools
+import typing
 from operator import attrgetter
 
 from .fast_csv import iter_rows_as_namedtuples
@@ -8,7 +8,7 @@ from .fast_csv import iter_rows_as_namedtuples
 class ShapeRow(typing.NamedTuple):
     lon: float
     lat: float
-    distance: typing.Optional[float]
+    distance: float | None
 
 
 _T = typing.TypeVar("_T")
@@ -17,9 +17,9 @@ _T = typing.TypeVar("_T")
 def read_shapes(
     directory: str,
     factory: typing.Callable[[typing.Iterable[ShapeRow]], _T],
-    shape_ids: typing.Optional[typing.AbstractSet[str]] = None,
+    shape_ids: typing.AbstractSet[str] | None = None,
     assume_sorted: bool = False,
-) -> typing.Dict[str, _T]:
+) -> dict[str, _T]:
     """Read shapes.txt as a dict mapping shape id to shape.
 
     `shape_ids` is an optional set for selecting only specific shape ids.

@@ -1,6 +1,6 @@
-import os
 import csv
 import logging
+import os
 from collections import namedtuple
 from itertools import starmap
 
