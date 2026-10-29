@@ -76,9 +76,11 @@ def test_time_cache_dst_switch_opday():
         (datetime.date(2022, 5, 18), "99:59:59"),
     ],
 )
-def test_datetime_to_gtfs_time_roundtrip(opday, gtfs_time):
+def test_datetime_to_gtfs_time_roundtrip(opday: datetime.date, gtfs_time: str) -> None:
     tc = TimeCache(ZoneInfo("Europe/Berlin"))
-    dt = tc.gtfs_time_to_datetime(opday, parse_timedelta(gtfs_time))
+    delta = parse_timedelta(gtfs_time)
+    assert delta is not None
+    dt = tc.gtfs_time_to_datetime(opday, delta)
 
     result_opday, delta = tc.datetime_to_gtfs_time(opday, dt)
 
@@ -86,7 +88,9 @@ def test_datetime_to_gtfs_time_roundtrip(opday, gtfs_time):
     assert format_timedelta(delta) == gtfs_time
 
 
-def test_datetime_to_gtfs_time_shifts_negative_timedelta(caplog):
+def test_datetime_to_gtfs_time_shifts_negative_timedelta(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     tz = ZoneInfo("Europe/Berlin")
     tc = TimeCache(tz)
     # the dst switch backward makes the reference time of that opday 01:00 local time,
@@ -101,7 +105,9 @@ def test_datetime_to_gtfs_time_shifts_negative_timedelta(caplog):
     assert "using operating day 2022-10-29 instead" in caplog.text
 
 
-def test_datetime_to_gtfs_time_shifts_too_large_timedelta(caplog):
+def test_datetime_to_gtfs_time_shifts_too_large_timedelta(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     tc = TimeCache(ZoneInfo("Europe/Berlin"))
     opday = datetime.date(2022, 5, 18)
     dt = tc.gtfs_time_to_datetime(opday, datetime.timedelta(hours=100))
@@ -113,7 +119,7 @@ def test_datetime_to_gtfs_time_shifts_too_large_timedelta(caplog):
     assert "using operating day 2022-05-19 instead" in caplog.text
 
 
-def test_datetime_to_gtfs_time_gives_up_eventually():
+def test_datetime_to_gtfs_time_gives_up_eventually() -> None:
     tc = TimeCache(ZoneInfo("Europe/Berlin"))
     opday = datetime.date(2022, 5, 18)
     dt = tc.gtfs_time_to_datetime(opday, datetime.timedelta(days=MAX_OPDAY_SHIFT + 5))
@@ -132,7 +138,7 @@ def test_datetime_to_gtfs_time_gives_up_eventually():
         (datetime.timedelta(seconds=1, microseconds=999999), "00:00:01"),
     ],
 )
-def test_format_timedelta(delta, expected):
+def test_format_timedelta(delta: datetime.timedelta, expected: str) -> None:
     assert format_timedelta(delta) == expected
     assert parse_timedelta(expected) == datetime.timedelta(
         seconds=int(delta.total_seconds())
@@ -146,7 +152,7 @@ def test_format_timedelta(delta, expected):
         datetime.timedelta(hours=100),
     ],
 )
-def test_format_timedelta_out_of_range(delta):
+def test_format_timedelta_out_of_range(delta: datetime.timedelta) -> None:
     with pytest.raises(ValueError, match="out of range"):
         format_timedelta(delta)
 
