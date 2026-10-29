@@ -1,11 +1,16 @@
 import datetime
 from zoneinfo import ZoneInfo
 
+import pytest
+
 from pygtfslib.temporal import (
+    DEFAULT_MAX_OPDAY_SHIFT,
     StopTime,
     TimeCache,
     TripOpDayProvider,
+    format_timedelta,
     get_seconds_without_waiting_times,
+    parse_timedelta,
 )
 
 
@@ -51,6 +56,107 @@ def test_time_cache_dst_switch_opday():
     delta = datetime.timedelta(hours=2, minutes=10, seconds=7)
     result = tc.gtfs_time_to_datetime(opday, delta)
     assert result == datetime.datetime(2022, 3, 27, 1, 10, 7, tzinfo=tz)
+
+
+@pytest.mark.parametrize(
+    "opday,gtfs_time",
+    [
+        # regular opday
+        (datetime.date(2022, 5, 18), "10:30:15"),
+        (datetime.date(2022, 5, 18), "26:20:45"),
+        # opday with a dst switch forward (23 hours long)
+        (datetime.date(2022, 3, 27), "02:10:07"),
+        (datetime.date(2022, 3, 27), "10:30:15"),
+        (datetime.date(2022, 3, 27), "24:30:00"),
+        # opday with a dst switch backward (25 hours long)
+        (datetime.date(2022, 10, 30), "01:00:00"),
+        (datetime.date(2022, 10, 30), "10:30:15"),
+        (datetime.date(2022, 10, 30), "25:30:00"),
+        # the largest GTFS time that can be expressed
+        (datetime.date(2022, 5, 18), "99:59:59"),
+    ],
+)
+def test_datetime_to_gtfs_time_roundtrip(opday: datetime.date, gtfs_time: str) -> None:
+    tc = TimeCache(ZoneInfo("Europe/Berlin"))
+    delta = parse_timedelta(gtfs_time)
+    assert delta is not None
+    dt = tc.gtfs_time_to_datetime(opday, delta)
+
+    result_opday, delta = tc.datetime_to_gtfs_time(opday, dt)
+
+    assert result_opday == opday
+    assert format_timedelta(delta) == gtfs_time
+
+
+def test_datetime_to_gtfs_time_shifts_negative_timedelta(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    tz = ZoneInfo("Europe/Berlin")
+    tc = TimeCache(tz)
+    # the dst switch backward makes the reference time of that opday 01:00 local time,
+    # so local midnight cannot be expressed as a GTFS time of that opday
+    opday = datetime.date(2022, 10, 30)
+    dt = datetime.datetime(2022, 10, 30, tzinfo=tz)
+
+    result_opday, delta = tc.datetime_to_gtfs_time(opday, dt)
+
+    assert result_opday == datetime.date(2022, 10, 29)
+    assert format_timedelta(delta) == "24:00:00"
+    assert "using operating day 2022-10-29 instead" in caplog.text
+
+
+def test_datetime_to_gtfs_time_shifts_too_large_timedelta(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    tc = TimeCache(ZoneInfo("Europe/Berlin"))
+    opday = datetime.date(2022, 5, 18)
+    dt = tc.gtfs_time_to_datetime(opday, datetime.timedelta(hours=100))
+
+    result_opday, delta = tc.datetime_to_gtfs_time(opday, dt)
+
+    assert result_opday == datetime.date(2022, 5, 19)
+    assert format_timedelta(delta) == "76:00:00"
+    assert "using operating day 2022-05-19 instead" in caplog.text
+
+
+def test_datetime_to_gtfs_time_gives_up_eventually() -> None:
+    tc = TimeCache(ZoneInfo("Europe/Berlin"))
+    opday = datetime.date(2022, 5, 18)
+    dt = tc.gtfs_time_to_datetime(
+        opday, datetime.timedelta(days=DEFAULT_MAX_OPDAY_SHIFT + 5)
+    )
+
+    with pytest.raises(ValueError, match="cannot express"):
+        tc.datetime_to_gtfs_time(opday, dt)
+
+
+@pytest.mark.parametrize(
+    "delta,expected",
+    [
+        (datetime.timedelta(0), "00:00:00"),
+        (datetime.timedelta(hours=1, minutes=2, seconds=3), "01:02:03"),
+        (datetime.timedelta(days=1, hours=1, minutes=30), "25:30:00"),
+        # sub-seconds are truncated
+        (datetime.timedelta(seconds=1, microseconds=999999), "00:00:01"),
+    ],
+)
+def test_format_timedelta(delta: datetime.timedelta, expected: str) -> None:
+    assert format_timedelta(delta) == expected
+    assert parse_timedelta(expected) == datetime.timedelta(
+        seconds=int(delta.total_seconds())
+    )
+
+
+@pytest.mark.parametrize(
+    "delta",
+    [
+        datetime.timedelta(seconds=-1),
+        datetime.timedelta(hours=100),
+    ],
+)
+def test_format_timedelta_out_of_range(delta: datetime.timedelta) -> None:
+    with pytest.raises(ValueError, match="out of range"):
+        format_timedelta(delta)
 
 
 def test_travel_times():

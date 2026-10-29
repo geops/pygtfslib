@@ -26,6 +26,19 @@ GTFS_WEEKDAYS = (
 RRULE_WEEKDAYS = {d: getattr(rrule, d[:2].upper()) for d in GTFS_WEEKDAYS}
 UNAWARE_NOON = datetime.time(hour=12)
 TWELVE_HOURS = datetime.timedelta(hours=12)
+ZERO_TIMEDELTA = datetime.timedelta()
+ONE_SECOND = datetime.timedelta(seconds=1)
+ONE_DAY = datetime.timedelta(days=1)
+# GTFS times have only two digits for the hour,
+# so 100 hours and more cannot be expressed
+MIN_INVALID_GTFS_TIMEDELTA = datetime.timedelta(hours=100)
+# shifting the operating day by more days than this is not a fix for bad data by default
+DEFAULT_MAX_OPDAY_SHIFT = 2
+
+
+class OpDayTime(typing.NamedTuple):
+    opday: datetime.date
+    delta: datetime.timedelta
 
 
 # strptime is really slow
@@ -45,6 +58,26 @@ def parse_timedelta(value):
     # we don't check lengths of parts
     hours, minutes, seconds = map(int, value.split(":"))
     return datetime.timedelta(hours=hours, minutes=minutes, seconds=seconds)
+
+
+# this is slow, we cache at least 100 * 60 minutes
+@lru_cache(maxsize=8192)
+def format_timedelta(delta: datetime.timedelta) -> str:
+    """Format a timedelta as a GTFS time of the form `HH:MM:SS`.
+
+    This is the inverse of `parse_timedelta`.
+    The hour is always padded to two digits and can be greater than 23.
+    Sub-second parts are truncated.
+
+    Raise `ValueError` if the timedelta is negative or 100 hours or more since GTFS has
+    only two digits for the hour. Use `TimeCache.datetime_to_gtfs_time` to get
+    timedeltas that are guaranteed to be in the valid range.
+    """
+    if not ZERO_TIMEDELTA <= delta < MIN_INVALID_GTFS_TIMEDELTA:
+        raise ValueError(f"timedelta out of range for a GTFS time: {delta}")
+    hours, remainder = divmod(delta // ONE_SECOND, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
 def get_seconds_without_waiting_times(
@@ -100,20 +133,80 @@ def utc_datetime(date, unaware_local_time, timezone):
 # some timezones are not hashable, so we need this helper class for the lru_cache to
 # work
 class TimeCache:
-    """A cache for quickly converting GTFS times to datetimes for a fixed timezone."""
+    """A cache for quickly converting between GTFS times and datetimes for a fixed timezone."""
 
-    def __init__(self, timezone, maxsize=512):
+    def __init__(self, timezone: datetime.tzinfo, maxsize: int = 512) -> None:
 
         # this is incredibly slow so we cache it
         @lru_cache(maxsize=maxsize)
-        def get_reference_datetime(opday):
+        def get_reference_datetime(opday: datetime.date) -> datetime.datetime:
             return utc_datetime(opday, UNAWARE_NOON, timezone) - TWELVE_HOURS
 
         # one cache per instance with the lifetime of the instance
         self.get_reference_datetime = get_reference_datetime
 
-    def gtfs_time_to_datetime(self, opday, delta):
+    def gtfs_time_to_datetime(
+        self, opday: datetime.date, delta: datetime.timedelta
+    ) -> datetime.datetime:
         return self.get_reference_datetime(opday) + delta
+
+    def datetime_to_gtfs_time(
+        self,
+        opday: datetime.date,
+        dt: datetime.datetime,
+        max_opday_shift: int = DEFAULT_MAX_OPDAY_SHIFT,
+    ) -> OpDayTime:
+        """Convert an aware datetime to an operating day and a GTFS timedelta.
+
+        This is the inverse of `gtfs_time_to_datetime`.
+        `opday` is the operating day `dt` is supposed to belong to.
+
+        Return the operating day and the timedelta since the GTFS reference time of
+        that operating day. The returned operating day is `opday` unless the resulting
+        timedelta would be negative or 100 hours or more (GTFS cannot express such
+        times). In this case the operating day is shifted until the timedelta is in the
+        valid range and a warning is logged.
+
+        A negative timedelta occurs for a datetime shortly after midnight of an
+        operating day with a DST switch that moves the clock backwards since the GTFS
+        reference time of such a day is one hour after midnight.
+
+        Raise `ValueError` if shifting the operating day by at most ``max_opday_shift``
+        days does not give a timedelta in the valid range.
+        """
+        delta = dt - self.get_reference_datetime(opday)
+        if ZERO_TIMEDELTA <= delta < MIN_INVALID_GTFS_TIMEDELTA:
+            return OpDayTime(opday, delta)
+        return self._shift_opday(opday, dt, delta, max_opday_shift)
+
+    def _shift_opday(
+        self,
+        opday: datetime.date,
+        dt: datetime.datetime,
+        delta: datetime.timedelta,
+        max_opday_shift: int,
+    ) -> OpDayTime:
+        original_opday, original_delta = opday, delta
+        # shifting the operating day by one day shifts the timedelta by about 24 hours
+        # in the opposite direction, so the valid range is reached after a few steps
+        step = ONE_DAY if delta >= MIN_INVALID_GTFS_TIMEDELTA else -ONE_DAY
+        for _ in range(max_opday_shift):
+            opday += step
+            delta = dt - self.get_reference_datetime(opday)
+            if ZERO_TIMEDELTA <= delta < MIN_INVALID_GTFS_TIMEDELTA:
+                logger.warning(
+                    "%s is not a valid GTFS time for operating day %s (%s),"
+                    " using operating day %s instead",
+                    dt,
+                    original_opday,
+                    original_delta,
+                    opday,
+                )
+                return OpDayTime(opday, delta)
+        raise ValueError(
+            f"cannot express {dt} as a GTFS time of an operating day "
+            f"within {max_opday_shift} days of {original_opday}"
+        )
 
 
 def parse_calendar_row(
