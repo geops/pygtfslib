@@ -2,7 +2,6 @@ import datetime
 from zoneinfo import ZoneInfo
 
 import pytest
-from dateutil.tz import gettz
 
 from pygtfslib.temporal import (
     MAX_OPDAY_SHIFT,
@@ -78,7 +77,7 @@ def test_time_cache_dst_switch_opday():
     ],
 )
 def test_datetime_to_gtfs_time_roundtrip(opday, gtfs_time):
-    tc = TimeCache(gettz("Europe/Berlin"))
+    tc = TimeCache(ZoneInfo("Europe/Berlin"))
     dt = tc.gtfs_time_to_datetime(opday, parse_timedelta(gtfs_time))
 
     result_opday, delta = tc.datetime_to_gtfs_time(opday, dt)
@@ -88,7 +87,7 @@ def test_datetime_to_gtfs_time_roundtrip(opday, gtfs_time):
 
 
 def test_datetime_to_gtfs_time_shifts_negative_timedelta(caplog):
-    tz = gettz("Europe/Berlin")
+    tz = ZoneInfo("Europe/Berlin")
     tc = TimeCache(tz)
     # the dst switch backward makes the reference time of that opday 01:00 local time,
     # so local midnight cannot be expressed as a GTFS time of that opday
@@ -103,7 +102,7 @@ def test_datetime_to_gtfs_time_shifts_negative_timedelta(caplog):
 
 
 def test_datetime_to_gtfs_time_shifts_too_large_timedelta(caplog):
-    tc = TimeCache(gettz("Europe/Berlin"))
+    tc = TimeCache(ZoneInfo("Europe/Berlin"))
     opday = datetime.date(2022, 5, 18)
     dt = tc.gtfs_time_to_datetime(opday, datetime.timedelta(hours=100))
 
@@ -115,7 +114,7 @@ def test_datetime_to_gtfs_time_shifts_too_large_timedelta(caplog):
 
 
 def test_datetime_to_gtfs_time_gives_up_eventually():
-    tc = TimeCache(gettz("Europe/Berlin"))
+    tc = TimeCache(ZoneInfo("Europe/Berlin"))
     opday = datetime.date(2022, 5, 18)
     dt = tc.gtfs_time_to_datetime(opday, datetime.timedelta(days=MAX_OPDAY_SHIFT + 5))
 
