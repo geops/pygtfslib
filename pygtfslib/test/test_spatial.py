@@ -1,8 +1,7 @@
 from collections import namedtuple
-
 from unittest.mock import patch
 
-from pygtfslib.spatial import read_shapes, ShapeRow
+from pygtfslib.spatial import ShapeRow, read_shapes
 
 
 def test_read_shapes():

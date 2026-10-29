@@ -1,10 +1,24 @@
 image: registry.geops.com/geops/gitlab-ci-dockerfiles/bookworm-python:latest
 
+stages:
+  - test
+
 variables:
-  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
-  XDG_CACHE_HOME: "$CI_PROJECT_DIR/.cache/"
+  # Fail instead of updating uv.lock if it is out of sync with pyproject.toml.
+  UV_LOCKED: "1"
+  UV_NO_EDITABLE: "1"
+  XDG_CACHE_HOME: "${CI_PROJECT_DIR}/.cache/"
   LC_ALL: "C.UTF-8"
   LANG: "C.UTF-8"
+
+cache:
+  # key just that cache does not grow unbounded
+  key:
+    files:
+      - uv.lock
+      - .pre-commit-config.yaml
+  paths:
+    - .cache
 
 default:
   before_script:
@@ -12,41 +26,16 @@ default:
     - mkdir -p ~/.ssh
     - echo -e "Host *\nStrictHostKeyChecking no\n\n" > ~/.ssh/config
     - echo "$GITLAB_PIPELINES_KEY" | tr -d '\r' | ssh-add - > /dev/null
-    - python3 -m venv venv
-    - source venv/bin/activate
-    - python3 --version
-    - pip install --upgrade pip
+    - uv cache dir && uv --preview-features=cache-size cache size --human
 
-stages:
-  - build
-  - test
-  - deploy
-
-cache:
-  key: "$CI_JOB_NAME"
-  paths:
-    - .pip-cache/
-
-build_wheels:
-  stage: build
-  script:
-    - pip wheel -w wheels -r requirements.txt pip "setuptools>=61" "setuptools_scm[toml]>=6.2" wheel
-    - pip wheel -w wheels --no-index --find-links=wheels .
-    - pip wheel -w dev-wheels --find-links=wheels -r dev-requirements.txt
-  artifacts:
-    when: on_success
-    paths:
-      - wheels/
-      - dev-wheels/
+  after_script:
+    - eval "$(ssh-agent -k)" # to stop ssh-agent from running forever
 
 run_tests:
   stage: test
-  needs:
-    - build_wheels
+  needs: []
   script:
-    - pip install --no-index --no-deps wheels/*
-    - pip install --no-index --no-deps dev-wheels/*
-    - pytest -s -vvv --log-cli-level INFO --cov=pygtfslib --cov-report term --cov-report xml:cobertura_coverage.xml --cov-fail-under=40 --junitxml=junit_coverage.xml pygtfslib
+    - uv run pytest -s -vvv --log-cli-level INFO --cov=pygtfslib --cov-report term --cov-report xml:cobertura_coverage.xml --cov-fail-under=40 --junitxml=junit_coverage.xml pygtfslib
   coverage: '/^TOTAL.+?(\d+\%)$/'
   artifacts:
     reports:
@@ -57,10 +46,12 @@ run_tests:
 
 run_pre_commit_checks:
   stage: test
-  needs:
-    - build_wheels
+  needs: []
   script:
-    - pip install --no-index --no-deps dev-wheels/*
-    - pre-commit run -c .pre-commit-config.yaml --all-files
+    # We have to uv run here since we still have a system mypy hook that needs installed
+    # dependencies. Could be fixed by using ty and calling it without installing
+    # anything since ty can handle dependencies on its own (mypy and pyright can't do
+    # that).
+    - uv run pre-commit run --all-files
   except:
     - master

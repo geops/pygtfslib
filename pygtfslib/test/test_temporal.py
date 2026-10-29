@@ -1,17 +1,16 @@
 import datetime
-
-from dateutil.tz import gettz
+from zoneinfo import ZoneInfo
 
 from pygtfslib.temporal import (
-    TimeCache,
-    get_seconds_without_waiting_times,
     StopTime,
+    TimeCache,
     TripOpDayProvider,
+    get_seconds_without_waiting_times,
 )
 
 
 def test_time_cache_regular_opday():
-    tz = gettz("Europe/Berlin")
+    tz = ZoneInfo("Europe/Berlin")
     tc = TimeCache(tz)
     opday = datetime.date(2022, 5, 18)
 
@@ -32,7 +31,7 @@ def test_time_cache_regular_opday():
 
 
 def test_time_cache_dst_switch_opday():
-    tz = gettz("Europe/Berlin")
+    tz = ZoneInfo("Europe/Berlin")
     tc = TimeCache(tz)
     opday = datetime.date(2022, 3, 27)
 

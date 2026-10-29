@@ -1,17 +1,16 @@
-from collections import defaultdict
 import datetime
+import itertools
 import logging
 import math
-from functools import lru_cache
 import typing
-import itertools
+from collections import defaultdict
+from datetime import UTC
+from functools import lru_cache
 from operator import attrgetter
 
-from dateutil.tz import tzutc
 from dateutil import rrule
 
 from .fast_csv import iter_rows, iter_rows_as_namedtuples
-
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +26,6 @@ GTFS_WEEKDAYS = (
 RRULE_WEEKDAYS = {d: getattr(rrule, d[:2].upper()) for d in GTFS_WEEKDAYS}
 UNAWARE_NOON = datetime.time(hour=12)
 TWELVE_HOURS = datetime.timedelta(hours=12)
-UTC = tzutc()
 
 
 # strptime is really slow
@@ -52,7 +50,7 @@ def parse_timedelta(value):
 def get_seconds_without_waiting_times(
     stop_times: typing.Iterable["StopTime"],
     start_at_zero: bool = True,
-) -> typing.List[typing.Optional[float]]:
+) -> list[float | None]:
     """Get arrival/departure times in seconds without waiting times.
 
     If stop times are not in chronological order, all times will be `None`.
@@ -65,7 +63,7 @@ def get_seconds_without_waiting_times(
     The default is to always start at 0.0 which is good for dedupliacation of trips that are only
     shifted in time.
     """
-    seconds: typing.List[typing.Optional[float]] = []
+    seconds: list[float | None] = []
     last_known_departure = None
     iter_stop_times = iter(stop_times)
     for st in iter_stop_times:
@@ -99,8 +97,8 @@ def utc_datetime(date, unaware_local_time, timezone):
     return aware_dt.astimezone(UTC)
 
 
-# dateutil timezones are not hashable, so we need this helper class
-# for the lru_cache to work
+# some timezones are not hashable, so we need this helper class for the lru_cache to
+# work
 class TimeCache:
     """A cache for quickly converting GTFS times to datetimes for a fixed timezone."""
 
@@ -236,7 +234,7 @@ def read_frequency_timedeltas(directory, frequency_based_log_level=logging.WARNI
 class TripOpDayProvider:
     """Provide information about operating days specific trips run on."""
 
-    trip_id_to_opdays: typing.Dict[str, typing.Set[datetime.date]]
+    trip_id_to_opdays: dict[str, set[datetime.date]]
 
     def __init__(
         self, trip_id_to_opdays: typing.Mapping[str, typing.AbstractSet[datetime.date]]
@@ -256,12 +254,12 @@ class TripOpDayProvider:
 
     def get_qualified_opdays(
         self,
-        trip_ids: typing.Union[str, typing.AbstractSet[str]],
+        trip_ids: str | typing.AbstractSet[str],
         criterion: typing.Callable[[datetime.date], bool],
-    ) -> typing.Set[datetime.date]:
+    ) -> set[datetime.date]:
         if isinstance(trip_ids, str):
             trip_ids = {trip_ids}
-        qualified_opdays: typing.Set[datetime.date] = set()
+        qualified_opdays: set[datetime.date] = set()
         for trip_id in trip_ids:
             trip_opdays = self.trip_id_to_opdays[trip_id]
             qualified_opdays.update(filter(criterion, trip_opdays))
@@ -269,7 +267,7 @@ class TripOpDayProvider:
 
     def has_qualified_opdays(
         self,
-        trip_ids: typing.Union[str, typing.AbstractSet[str]],
+        trip_ids: str | typing.AbstractSet[str],
         criterion: typing.Callable[[datetime.date], bool],
     ) -> bool:
         if isinstance(trip_ids, str):
@@ -281,7 +279,7 @@ class TripOpDayProvider:
         return False
 
 
-_TOptionalStr = typing.TypeVar("_TOptionalStr", bound=typing.Optional[str])
+_TOptionalStr = typing.TypeVar("_TOptionalStr", bound=str | None)
 
 
 class StopTime:
@@ -300,13 +298,13 @@ class StopTime:
 
     trip_id: str
     stop_sequence: int
-    arrival_time: typing.Optional[datetime.timedelta]
-    departure_time: typing.Optional[datetime.timedelta]
+    arrival_time: datetime.timedelta | None
+    departure_time: datetime.timedelta | None
     stop_id: str
-    stop_headsign: typing.Optional[str]
+    stop_headsign: str | None
     pickup_type: int
     drop_off_type: int
-    shape_dist_traveled: typing.Optional[float]
+    shape_dist_traveled: float | None
     timepoint: int
 
     def __init__(
@@ -332,18 +330,18 @@ class StopTime:
         self.timepoint = int(row.timepoint or 1)
 
     @property
-    def arrival_or_departure_time(self) -> typing.Optional[datetime.timedelta]:
+    def arrival_or_departure_time(self) -> datetime.timedelta | None:
         return self.departure_time if self.arrival_time is None else self.arrival_time
 
     @property
-    def departure_or_arrival_time(self) -> typing.Optional[datetime.timedelta]:
+    def departure_or_arrival_time(self) -> datetime.timedelta | None:
         return self.arrival_time if self.departure_time is None else self.departure_time
 
 
 def read_stop_times(
     directory: str,
-    trip_ids: typing.Optional[typing.AbstractSet[str]] = None,
-) -> typing.Dict[str, typing.List[StopTime]]:
+    trip_ids: typing.AbstractSet[str] | None = None,
+) -> dict[str, list[StopTime]]:
     """Read stop_times.txt as a dict mapping trip id to list of StopTimes.
 
     `trip_ids` is an optional set for selecting only specific trip ids.
