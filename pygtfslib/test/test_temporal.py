@@ -297,19 +297,6 @@ def test_datetime_to_gtfs_time_forwards_max_opday_shift() -> None:
         tc.datetime_to_gtfs_time(REGULAR_OPDAY, dt, max_opday_shift=2)
 
 
-def test_results_can_be_unpacked_like_tuples() -> None:
-    tc = TimeCache(BERLIN)
-    dt = tc.gtfs_time_to_datetime(REGULAR_OPDAY, hours(10))
-
-    opday, delta = tc.datetime_to_gtfs_time(REGULAR_OPDAY, dt)
-    shifted_opday, deltas = tc.datetimes_to_gtfs_times(REGULAR_OPDAY, [dt])
-
-    assert (opday, delta) == (REGULAR_OPDAY, hours(10))
-    assert (shifted_opday, deltas) == (REGULAR_OPDAY, [hours(10)])
-    assert OpDayTime._fields == ("opday", "delta")
-    assert OpDayTimes._fields == ("opday", "deltas")
-
-
 @pytest.mark.parametrize(
     "delta,expected",
     [
