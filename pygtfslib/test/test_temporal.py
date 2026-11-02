@@ -5,6 +5,12 @@ import pytest
 
 from pygtfslib.temporal import (
     DEFAULT_MAX_OPDAY_SHIFT,
+    MIN_INVALID_GTFS_TIMEDELTA,
+    ONE_DAY,
+    ONE_SECOND,
+    ZERO_TIMEDELTA,
+    OpDayTime,
+    OpDayTimes,
     StopTime,
     TimeCache,
     TripOpDayProvider,
@@ -12,6 +18,19 @@ from pygtfslib.temporal import (
     get_seconds_without_waiting_times,
     parse_timedelta,
 )
+
+BERLIN = ZoneInfo("Europe/Berlin")
+# a regular opday without a dst switch
+REGULAR_OPDAY = datetime.date(2022, 5, 18)
+# an opday with a dst switch forward (23 hours long)
+DST_FORWARD_OPDAY = datetime.date(2022, 3, 27)
+# an opday with a dst switch backward (25 hours long)
+DST_BACKWARD_OPDAY = datetime.date(2022, 10, 30)
+MAX_VALID_GTFS_TIMEDELTA = MIN_INVALID_GTFS_TIMEDELTA - ONE_SECOND
+
+
+def hours(value: float) -> datetime.timedelta:
+    return datetime.timedelta(hours=value)
 
 
 def test_time_cache_regular_opday():
@@ -58,76 +77,224 @@ def test_time_cache_dst_switch_opday():
     assert result == datetime.datetime(2022, 3, 27, 1, 10, 7, tzinfo=tz)
 
 
+# the datetimes to convert are given as offsets from the GTFS reference time of the
+# opday that is passed in, i.e. as the GTFS timedeltas that opday would give if GTFS
+# could express them
 @pytest.mark.parametrize(
-    "opday,gtfs_time",
+    "opday,offsets,expected_shift,expected_gtfs_times",
     [
-        # regular opday
-        (datetime.date(2022, 5, 18), "10:30:15"),
-        (datetime.date(2022, 5, 18), "26:20:45"),
-        # opday with a dst switch forward (23 hours long)
-        (datetime.date(2022, 3, 27), "02:10:07"),
-        (datetime.date(2022, 3, 27), "10:30:15"),
-        (datetime.date(2022, 3, 27), "24:30:00"),
-        # opday with a dst switch backward (25 hours long)
-        (datetime.date(2022, 10, 30), "01:00:00"),
-        (datetime.date(2022, 10, 30), "10:30:15"),
-        (datetime.date(2022, 10, 30), "25:30:00"),
-        # the largest GTFS time that can be expressed
-        (datetime.date(2022, 5, 18), "99:59:59"),
+        pytest.param(REGULAR_OPDAY, [hours(10.5)], 0, ["10:30:00"], id="single time"),
+        pytest.param(
+            REGULAR_OPDAY,
+            [hours(26), hours(0), hours(10)],
+            0,
+            ["26:00:00", "00:00:00", "10:00:00"],
+            id="order of times is preserved",
+        ),
+        pytest.param(
+            DST_FORWARD_OPDAY,
+            [hours(2), hours(24.5)],
+            0,
+            ["02:00:00", "24:30:00"],
+            id="dst switch forward",
+        ),
+        pytest.param(
+            DST_BACKWARD_OPDAY,
+            [hours(1), hours(25.5)],
+            0,
+            ["01:00:00", "25:30:00"],
+            id="dst switch backward",
+        ),
+        pytest.param(
+            REGULAR_OPDAY,
+            [ZERO_TIMEDELTA, MAX_VALID_GTFS_TIMEDELTA],
+            0,
+            ["00:00:00", "99:59:59"],
+            id="bounds of the valid range",
+        ),
+        pytest.param(
+            DST_BACKWARD_OPDAY,
+            [hours(-1)],
+            -1,
+            ["24:00:00"],
+            id="negative time shifts the opday backward",
+        ),
+        pytest.param(
+            REGULAR_OPDAY,
+            [hours(-2), hours(20)],
+            -1,
+            ["22:00:00", "44:00:00"],
+            id="valid time is shifted along with the negative one",
+        ),
+        pytest.param(
+            REGULAR_OPDAY,
+            [hours(100)],
+            1,
+            ["76:00:00"],
+            id="too large time shifts the opday forward",
+        ),
+        pytest.param(
+            REGULAR_OPDAY,
+            [hours(101), hours(25), hours(50)],
+            1,
+            ["77:00:00", "01:00:00", "26:00:00"],
+            id="valid times are shifted along with the too large one",
+        ),
+        pytest.param(
+            REGULAR_OPDAY,
+            [hours(125)],
+            2,
+            ["77:00:00"],
+            id="more than one shift",
+        ),
     ],
 )
-def test_datetime_to_gtfs_time_roundtrip(opday: datetime.date, gtfs_time: str) -> None:
-    tc = TimeCache(ZoneInfo("Europe/Berlin"))
-    delta = parse_timedelta(gtfs_time)
-    assert delta is not None
-    dt = tc.gtfs_time_to_datetime(opday, delta)
-
-    result_opday, delta = tc.datetime_to_gtfs_time(opday, dt)
-
-    assert result_opday == opday
-    assert format_timedelta(delta) == gtfs_time
-
-
-def test_datetime_to_gtfs_time_shifts_negative_timedelta(
+def test_datetimes_to_gtfs_times(
+    opday: datetime.date,
+    offsets: list[datetime.timedelta],
+    expected_shift: int,
+    expected_gtfs_times: list[str],
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    tz = ZoneInfo("Europe/Berlin")
-    tc = TimeCache(tz)
-    # the dst switch backward makes the reference time of that opday 01:00 local time,
-    # so local midnight cannot be expressed as a GTFS time of that opday
-    opday = datetime.date(2022, 10, 30)
-    dt = datetime.datetime(2022, 10, 30, tzinfo=tz)
+    tc = TimeCache(BERLIN)
+    dts = [tc.gtfs_time_to_datetime(opday, offset) for offset in offsets]
 
-    result_opday, delta = tc.datetime_to_gtfs_time(opday, dt)
+    result = tc.datetimes_to_gtfs_times(opday, dts)
 
-    assert result_opday == datetime.date(2022, 10, 29)
-    assert format_timedelta(delta) == "24:00:00"
-    assert "using operating day 2022-10-29 instead" in caplog.text
+    assert result.opday == opday + expected_shift * ONE_DAY
+    assert [format_timedelta(delta) for delta in result.deltas] == expected_gtfs_times
+    assert_describes_datetimes(tc, dts, result)
+    # the opday is shifted only if necessary, and never without a warning
+    assert bool(caplog.records) == bool(expected_shift)
+    if expected_shift:
+        assert f"using operating day {result.opday} instead" in caplog.text
 
 
-def test_datetime_to_gtfs_time_shifts_too_large_timedelta(
-    caplog: pytest.LogCaptureFixture,
+def assert_describes_datetimes(
+    tc: TimeCache, dts: list[datetime.datetime], result: OpDayTimes
 ) -> None:
-    tc = TimeCache(ZoneInfo("Europe/Berlin"))
-    opday = datetime.date(2022, 5, 18)
-    dt = tc.gtfs_time_to_datetime(opday, datetime.timedelta(hours=100))
-
-    result_opday, delta = tc.datetime_to_gtfs_time(opday, dt)
-
-    assert result_opday == datetime.date(2022, 5, 19)
-    assert format_timedelta(delta) == "76:00:00"
-    assert "using operating day 2022-05-19 instead" in caplog.text
-
-
-def test_datetime_to_gtfs_time_gives_up_eventually() -> None:
-    tc = TimeCache(ZoneInfo("Europe/Berlin"))
-    opday = datetime.date(2022, 5, 18)
-    dt = tc.gtfs_time_to_datetime(
-        opday, datetime.timedelta(days=DEFAULT_MAX_OPDAY_SHIFT + 5)
+    """Assert the result is a valid and faithful GTFS representation of `dts`."""
+    assert all(
+        ZERO_TIMEDELTA <= delta < MIN_INVALID_GTFS_TIMEDELTA for delta in result.deltas
     )
+    assert [
+        tc.gtfs_time_to_datetime(result.opday, delta) for delta in result.deltas
+    ] == dts
 
-    with pytest.raises(ValueError, match="cannot express"):
-        tc.datetime_to_gtfs_time(opday, dt)
+
+@pytest.mark.parametrize(
+    "offsets,match",
+    [
+        pytest.param(
+            [ZERO_TIMEDELTA, MIN_INVALID_GTFS_TIMEDELTA],
+            "100 hours or more apart",
+            id="times too far apart for any opday",
+        ),
+        pytest.param(
+            [hours(-2), hours(78)],
+            "cannot express",
+            id="shifting fixes one end but breaks the other",
+        ),
+        pytest.param(
+            [hours(24 * (DEFAULT_MAX_OPDAY_SHIFT + 5))],
+            f"within {DEFAULT_MAX_OPDAY_SHIFT} days",
+            id="valid opday too far away",
+        ),
+    ],
+)
+def test_datetimes_to_gtfs_times_raises(
+    offsets: list[datetime.timedelta], match: str
+) -> None:
+    tc = TimeCache(BERLIN)
+    dts = [tc.gtfs_time_to_datetime(REGULAR_OPDAY, offset) for offset in offsets]
+
+    with pytest.raises(ValueError, match=match):
+        tc.datetimes_to_gtfs_times(REGULAR_OPDAY, dts)
+
+
+@pytest.mark.parametrize(
+    "offsets,max_lookups",
+    [
+        # no opday whatsoever can work, so not a single shifted one is tried
+        pytest.param(
+            [ZERO_TIMEDELTA, MIN_INVALID_GTFS_TIMEDELTA],
+            2,
+            id="times too far apart for any opday",
+        ),
+        # the first shifted opday already shows that the times cannot both be in the
+        # valid range, shifting further only makes it worse
+        pytest.param(
+            [hours(-2), hours(78)],
+            3,
+            id="shifting fixes one end but breaks the other",
+        ),
+    ],
+)
+def test_datetimes_to_gtfs_times_gives_up_early(
+    offsets: list[datetime.timedelta], max_lookups: int
+) -> None:
+    tc = TimeCache(BERLIN)
+    dts = [tc.gtfs_time_to_datetime(REGULAR_OPDAY, offset) for offset in offsets]
+    looked_up_opdays = record_reference_datetime_lookups(tc)
+
+    with pytest.raises(ValueError):
+        # even a huge max_opday_shift must not lead to trying every opday
+        tc.datetimes_to_gtfs_times(REGULAR_OPDAY, dts, max_opday_shift=1000)
+
+    assert len(looked_up_opdays) <= max_lookups
+
+
+def record_reference_datetime_lookups(tc: TimeCache) -> list[datetime.date]:
+    """Make `tc` record the opdays it looks up and return the recording list."""
+    get_reference_datetime = tc.get_reference_datetime
+    looked_up_opdays: list[datetime.date] = []
+
+    def record_and_get(opday: datetime.date) -> datetime.datetime:
+        looked_up_opdays.append(opday)
+        return get_reference_datetime(opday)
+
+    # the cached function is just an instance attribute, so it can be wrapped
+    tc.get_reference_datetime = record_and_get  # type: ignore[assignment]
+    return looked_up_opdays
+
+
+def test_datetimes_to_gtfs_times_without_datetimes() -> None:
+    tc = TimeCache(BERLIN)
+
+    assert tc.datetimes_to_gtfs_times(REGULAR_OPDAY, []) == (REGULAR_OPDAY, [])
+
+
+@pytest.mark.parametrize(
+    "opday,offset",
+    [
+        pytest.param(REGULAR_OPDAY, hours(10.5), id="no shift"),
+        pytest.param(DST_BACKWARD_OPDAY, hours(-1), id="shift backward"),
+        pytest.param(REGULAR_OPDAY, hours(100), id="shift forward"),
+    ],
+)
+def test_datetime_to_gtfs_time_is_the_single_datetime_case(
+    opday: datetime.date, offset: datetime.timedelta
+) -> None:
+    tc = TimeCache(BERLIN)
+    dt = tc.gtfs_time_to_datetime(opday, offset)
+
+    result = tc.datetime_to_gtfs_time(opday, dt)
+
+    expected_opday, expected_deltas = tc.datetimes_to_gtfs_times(opday, [dt])
+    assert isinstance(result, OpDayTime)
+    assert result == OpDayTime(expected_opday, expected_deltas[0])
+
+
+def test_datetime_to_gtfs_time_forwards_max_opday_shift() -> None:
+    tc = TimeCache(BERLIN)
+    dt = tc.gtfs_time_to_datetime(REGULAR_OPDAY, hours(170))
+
+    result = tc.datetime_to_gtfs_time(REGULAR_OPDAY, dt, max_opday_shift=3)
+
+    assert result.opday == REGULAR_OPDAY + 3 * ONE_DAY
+    assert format_timedelta(result.delta) == "98:00:00"
+    with pytest.raises(ValueError, match="within 2 days"):
+        tc.datetime_to_gtfs_time(REGULAR_OPDAY, dt, max_opday_shift=2)
 
 
 @pytest.mark.parametrize(
